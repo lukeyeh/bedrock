@@ -8,16 +8,19 @@ Each directory is a library and a Bazel package. Dependencies point
 downwards only.
 
 ```
-discord/       a Discord bot's client
-├─ http/       an HTTP/1.1 client
-├─ websocket/  WebSocket connections
-│  └─ net/     the event loop; byte streams: TCP, TLS, buffered reading
-│     └─ os/   the kernel: sockets, io_uring, epoll
-└─ json/       JSON values
-sqlite/        SQLite databases
-async/         Task, Sequence, Awaitable, TaskScope: under everything that waits
-testing/       the main function of every test
+discord/          a Discord bot's client
+├─ websocket/     WebSocket connections
+│  └─ http/       an HTTP/1.1 client
+│     └─ net/     the event loop; byte streams: TCP, TLS, buffered reading
+│        └─ os/   the kernel: sockets, io_uring, epoll
+│           └─ async/   Task, Sequence, Awaitable, TaskScope
+└─ json/          JSON values
+sqlite/           SQLite databases
+testing/          the main function of every test
 ```
+
+`discord/` also uses `http/`, `net/` and `async/` directly, and so on down:
+each library may use any below it on its branch.
 
 ### `async/`: coroutines with names
 
@@ -44,7 +47,7 @@ The only code that makes system calls. Sockets are classes that own their descri
 
 ### `net/`: an event loop and byte streams
 
-`EventLoop` runs tasks on one thread. `net::Stream` is a byte stream to another machine, plain or TLS, with a deadline on every operation; `net::Reader` buffers one for protocols to parse.
+`EventLoop` runs tasks on one thread. `net::Stream` is a byte stream to another machine, plain or TLS, with a deadline on every read; `net::Reader` buffers one for protocols to parse.
 
 | Header | What it is for |
 | --- | --- |
@@ -110,6 +113,14 @@ One `_test.cc` holds both GoogleTest tests and Google Benchmark benchmarks. Link
 ## A taste
 
 ```cpp
+#include <memory>
+#include <string>
+#include <utility>
+
+#include "absl/log/log.h"
+#include "absl/status/status.h"
+#include "absl/status/status_macros.h"
+#include "absl/status/statusor.h"
 #include "async/status_macros.h"
 #include "async/task.h"
 #include "http/client.h"
@@ -221,9 +232,13 @@ package that Bazel sees as an external repository.
 
 4. Depend on a library as `"@bedrock//:net"`, `"@bedrock//:discord"` and so
    on, one target per directory, and include its headers by their full path:
-   `#include "net/stream.h"`. Tests link `"@bedrock//:testing_main"`.
+   `#include "net/stream.h"`. Tests link `"@bedrock//:testing_main"` along
+   with `"@gtest"` and `"@gbenchmark"`.
 
-5. Build with the same flags (`.bazelrc` here): `-std=c++20 -fno-exceptions`.
+5. Build with the same flags (`.bazelrc` here): `-std=c++20 -fno-exceptions
+   -Wno-coroutine-missing-unhandled-exception`, with `--dynamic_mode=off`.
+   Copy its `test:epoll` line too, to be able to run the project's tests on
+   the epoll backend with `--config=epoll`.
 
 `nix flake update bedrock` moves the project to bedrock's latest revision.
 For a Nix package of the project itself, `bedrock` as a build input brings

@@ -1,23 +1,6 @@
 # bedrock
 
-C++20 libraries for programs written as coroutines on one thread: an event
-loop over io_uring or epoll, TCP and TLS streams, an HTTP client, WebSocket,
-JSON, SQLite, and a Discord client built from them.
-
-They share one set of habits:
-
-- **Asynchronous code reads top to bottom.** A function that waits returns
-  `Task<T>` and uses `co_await`; nothing takes a callback.
-- **Nothing throws.** Every failure is an `absl::Status` or
-  `absl::StatusOr`, and the build has exceptions off.
-- **Each kind of knowledge lives in one place.** Only `os/` makes system
-  calls; only `async/` touches the coroutine machinery; each protocol is
-  known to one directory.
-- **Tests are the examples.** Every `foo.h` has a `foo_test.cc` beside it,
-  written to be read, with the code's benchmarks and their recorded results
-  at the bottom.
-
-Linux only, built with clang.
+A set of C++ libraries that I find useful.
 
 ## The libraries
 

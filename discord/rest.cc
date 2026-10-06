@@ -29,7 +29,7 @@ constexpr std::string_view kApi = "https://discord.com/api/v10";
 
 // Discord asks that bots say what they are.
 constexpr std::string_view kUserAgent =
-    "DiscordBot (https://github.com/lukeyeh/gm_bot_cc, 0.1)";
+    "DiscordBot (https://github.com/lukeyeh/bedrock, 0.1)";
 
 // How many times a call is made before a rate limit is reported instead of
 // waited out, and the longest single wait.

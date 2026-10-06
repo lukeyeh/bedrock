@@ -4,10 +4,10 @@
 // whether it works, and benchmarks, which say what it costs. One binary runs
 // either:
 //
-//   bazel test //gm:ledger_test
+//   bazel test //net:stream_test
 //       Runs the tests.
 //
-//   bazel run -c opt //gm:ledger_test -- --benchmark_filter=all
+//   bazel run -c opt //net:stream_test -- --benchmark_filter=all
 //       Runs the benchmarks instead. Any flag starting with --benchmark
 //       selects this mode; --benchmark_filter takes a regular expression to
 //       choose which ones.

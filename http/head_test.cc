@@ -162,7 +162,7 @@ void BM_FormatHead(benchmark::State& state) {
               http::Header{
                   .name = "User-Agent",
                   .value =
-                      "DiscordBot (https://github.com/lukeyeh/gm_bot_cc, 0.1)",
+                      "DiscordBot (https://github.com/lukeyeh/bedrock, 0.1)",
               },
               http::Header{
                   .name = "Content-Type",

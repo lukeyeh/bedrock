@@ -270,8 +270,8 @@ Task<absl::StatusOr<Gateway::Link>> Gateway::Connect() {
                       .Set("intents", intents_)
                       .Set("properties", json::Value()
                                              .Set("os", "linux")
-                                             .Set("browser", "gm_bot")
-                                             .Set("device", "gm_bot")));
+                                             .Set("browser", "bedrock")
+                                             .Set("device", "bedrock")));
   }
   CO_RETURN_IF_ERROR(co_await connection->Send(json::Serialize(introduction)));
 

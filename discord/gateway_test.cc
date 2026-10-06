@@ -55,7 +55,7 @@ std::string Message(int64_t sequence, std::string_view content) {
 
 constexpr char kIdentify[] =
     R"({"op":2,"d":{"token":"secret","intents":33281,"properties":)"
-    R"({"os":"linux","browser":"gm_bot","device":"gm_bot"}}})";
+    R"({"os":"linux","browser":"bedrock","device":"bedrock"}}})";
 
 // A gateway talking to `server`, and the waits it has taken between attempts
 // to connect, which a test gateway only records.

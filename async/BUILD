@@ -31,6 +31,7 @@ cc_library(
     srcs = ["task_scope.cc"],
     hdrs = ["task_scope.h"],
     deps = [
+        ":awaitable",
         ":task",
         "@abseil-cpp",
     ],

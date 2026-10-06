@@ -12,7 +12,7 @@ discord/          a Discord bot's client
 ├─ websocket/     WebSocket connections
 │  └─ http/       HTTP/1.1, as client and as server
 │     └─ net/     the event loop; byte streams: TCP, TLS, buffered reading
-│        └─ os/   the kernel: sockets, io_uring, epoll
+│        └─ os/   the kernel: sockets, io_uring, epoll, child processes
 │           └─ async/   Task, Sequence, Awaitable, TaskScope
 └─ json/          JSON values
 sqlite/           SQLite databases
@@ -32,17 +32,18 @@ The one place that touches the C++ coroutine machinery (`promise_type`, `await_s
 | `async/sequence.h` | Sequence<T>: the return type of an asynchronous function that produces many Ts, one at a time. |
 | `async/status_macros.h` | ABSL_RETURN_IF_ERROR and ABSL_ASSIGN_OR_RETURN for asynchronous functions. |
 | `async/task.h` | Task<T>: the return type of an asynchronous function that produces a T. |
-| `async/task_scope.h` | TaskScope: running tasks that nobody awaits. |
+| `async/task_scope.h` | TaskScope: running tasks that nobody awaits, and waiting for several at once with `Join`. |
 
 ### `os/`: the kernel in C++ terms
 
-The only code that makes system calls. Sockets are classes that own their descriptor, choices are `enum class`, failures are `absl::Status`, and asynchronous I/O is an `IoDriver` with two interchangeable backends, io_uring and epoll.
+The only code that makes system calls. Sockets are classes that own their descriptor, choices are `enum class`, failures are `absl::Status`, and asynchronous I/O is an `IoDriver` with two interchangeable backends, io_uring and epoll. `os::RunProcess` runs another program without blocking the thread.
 
 | Header | What it is for |
 | --- | --- |
 | `os/epoll_backend.h` | Internal to //os: the epoll way of carrying out operations. |
 | `os/io.h` | The kernel's asynchronous network I/O, as C++. |
 | `os/io_uring_backend.h` | Internal to //os: the io_uring way of carrying out operations. |
+| `os/process.h` | Other programs, run as child processes. |
 | `os/random.h` | Random bytes from the kernel: unpredictable to anyone, so fit for things that are secret because they cannot be guessed, such as a session token. |
 | `os/socket.h` | Network sockets as C++ objects. Wraps the kernel's socket interface so that callers deal in classes, enums and absl::Status rather than file descriptors, option constants and error numbers. |
 
@@ -60,12 +61,13 @@ The only code that makes system calls. Sockets are classes that own their descri
 
 ### `http/`: HTTP/1.1, as client and as server
 
-`http::Serve` has a handler answer every request that arrives on a listener, with `http/form.h` and `http/cookie.h` for what requests carry. `http::Client::Send` is a coroutine that sends a request and returns the response. `http::FakeClient` answers from a queue and records what it was sent, for testing code that makes requests.
+`http::Serve` has a handler answer every request that arrives on a listener, with `http/form.h` and `http/cookie.h` for what requests carry. `http::Client::Send` is a coroutine that sends a request and returns the response. `Open` returns the head and leaves the body to be read as it arrives, and `http::EventReader` reads such a body as server-sent events. `http::FakeClient` answers from a queue and records what it was sent, for testing code that makes requests.
 
 | Header | What it is for |
 | --- | --- |
 | `http/client.h` | An HTTP client: give it a request, get back the server's response. |
 | `http/cookie.h` | Cookies: small named values a server asks a browser to keep and send back with every later request, which is how a server recognises someone who has signed in. |
+| `http/event_stream.h` | Server-sent events: a response body that is a series of small messages, each sent when the server has something to say. |
 | `http/form.h` | Names and values written the way HTML forms send them: the body of a posted form, and the query of a URL. |
 | `http/fake_client.h` | An http::Client for tests: it records the requests it is sent and answers them from a queue, so code that calls a web API can be tested without one. |
 | `http/head.h` | The part of an HTTP/1.1 message that comes before the body: a start line and headers. Requests, responses and the WebSocket handshake all begin with one, and this is the only place that knows how it is written. |

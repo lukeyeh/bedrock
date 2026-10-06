@@ -10,6 +10,7 @@ cc_library(
     srcs = [
         "client.cc",
         "cookie.cc",
+        "event_stream.cc",
         "form.cc",
         "head.cc",
         "server.cc",
@@ -17,6 +18,7 @@ cc_library(
     hdrs = [
         "client.h",
         "cookie.h",
+        "event_stream.h",
         "form.h",
         "head.h",
         "server.h",
@@ -38,6 +40,7 @@ cc_library(
     deps = [
         ":http",
         "//async:task",
+        "//net",
         "@abseil-cpp",
     ],
 )
@@ -51,6 +54,7 @@ cc_library(
             ":fake_client",
             ":http",
             "//async:task",
+            "//async:task_scope",
             "//net",
             "//net:event_loop",
             "//testing:main",
@@ -62,6 +66,7 @@ cc_library(
     for name in [
         "client_test",
         "cookie_test",
+        "event_stream_test",
         "fake_client_test",
         "form_test",
         "head_test",

@@ -90,6 +90,48 @@ TEST(TaskScopeTest, AbandonsUnfinishedTasksWhenDestroyed) {
   EXPECT_TRUE(destroyed);
 }
 
+Task<> SpawnTwoAndJoin(Gate& first, Gate& second, bool& joined) {
+  bool first_passed = false;
+  bool second_passed = false;
+  TaskScope scope;
+  scope.Spawn(PassThenSetFlag(first, first_passed));
+  scope.Spawn(PassThenSetFlag(second, second_passed));
+
+  co_await scope.Join();
+  joined = first_passed && second_passed;
+}
+
+// Join is how to run tasks side by side and carry on when all are done: both
+// are started before either finishes, and the joiner continues after the last.
+TEST(TaskScopeTest, JoinWaitsForEverySpawnedTask) {
+  TaskScope outer;
+  Gate first;
+  Gate second;
+  bool joined = false;
+  outer.Spawn(SpawnTwoAndJoin(first, second, joined));
+
+  second.Open();
+  EXPECT_FALSE(joined);
+
+  first.Open();
+  EXPECT_TRUE(joined);
+  EXPECT_EQ(outer.unfinished(), 0);
+}
+
+Task<> JoinThenSetFlag(TaskScope& scope, bool& flag) {
+  co_await scope.Join();
+  flag = true;
+}
+
+// With nothing unfinished there is nothing to wait for.
+TEST(TaskScopeTest, JoinOfAnIdleScopeDoesNotWait) {
+  TaskScope outer;
+  TaskScope idle;
+  bool joined = false;
+  outer.Spawn(JoinThenSetFlag(idle, joined));
+  EXPECT_TRUE(joined);
+}
+
 // -----------------------------------------------------------------------------
 // Benchmarks
 // -----------------------------------------------------------------------------

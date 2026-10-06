@@ -12,9 +12,11 @@
 #include "gtest/gtest.h"
 #include "http/client.h"
 #include "net/event_loop.h"
+#include "net/stream.h"
 
 namespace {
 
+using absl_testing::IsOkAndHolds;
 using absl_testing::StatusIs;
 
 void RunOnEventLoop(Task<> test) {
@@ -63,6 +65,47 @@ TEST(FakeClientTest, AnswersNoContentByDefault) {
         });
     ABSL_EXPECT_OK(response);
     if (response.ok()) EXPECT_EQ(response->status, 204);
+  }());
+}
+
+// Open is answered from the same queue, with the body ready to be read.
+TEST(FakeClientTest, AnswersOpenWithABodyToRead) {
+  RunOnEventLoop([]() -> Task<> {
+    http::FakeClient client;
+    client.Answer(http::Response{
+        .status = 200,
+        .body = "data: hello\n\n",
+    });
+
+    const absl::StatusOr<http::OpenResponse> response = co_await client.Open(
+        http::Request{
+            .url = "https://example.com/events",
+        },
+        net::Deadline::max());
+
+    ABSL_EXPECT_OK(response);
+    if (!response.ok()) co_return;
+    EXPECT_EQ(response->status, 200);
+    EXPECT_THAT(co_await response->body->Next(net::Deadline::max()),
+                IsOkAndHolds("data: hello\n\n"));
+    EXPECT_THAT(co_await response->body->Next(net::Deadline::max()),
+                IsOkAndHolds(""));
+    EXPECT_EQ(client.requests().size(), 1);
+  }());
+}
+
+// FakeBody alone stands in for a body that arrives in pieces of the test's
+// choosing.
+TEST(FakeBodyTest, HandsOutItsPiecesThenEnds) {
+  RunOnEventLoop([]() -> Task<> {
+    http::FakeBody body({
+        "one",
+        "two",
+    });
+
+    EXPECT_THAT(co_await body.Next(net::Deadline::max()), IsOkAndHolds("one"));
+    EXPECT_THAT(co_await body.Next(net::Deadline::max()), IsOkAndHolds("two"));
+    EXPECT_THAT(co_await body.Next(net::Deadline::max()), IsOkAndHolds(""));
   }());
 }
 

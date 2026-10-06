@@ -54,6 +54,34 @@ cc_test(
     ],
 )
 
+cc_library(
+    name = "process",
+    srcs = ["process.cc"],
+    hdrs = ["process.h"],
+    deps = [
+        ":io",
+        ":socket",
+        "//async:task",
+        "@abseil-cpp",
+    ],
+)
+
+cc_test(
+    name = "process_test",
+    size = "small",
+    srcs = ["process_test.cc"],
+    deps = [
+        ":io",
+        ":process",
+        "//async:task",
+        "//async:task_scope",
+        "//testing:main",
+        "@abseil-cpp",
+        "@gbenchmark",
+        "@gtest",
+    ],
+)
+
 cc_test(
     name = "socket_test",
     size = "small",

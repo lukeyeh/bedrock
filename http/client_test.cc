@@ -28,6 +28,7 @@
 
 namespace {
 
+using absl_testing::IsOkAndHolds;
 using absl_testing::StatusIs;
 using testing::ElementsAre;
 using testing::EndsWith;
@@ -332,6 +333,149 @@ TEST(ClientTest, ReportsWhyThereIsNoResponse) {
     }
     EXPECT_THAT(co_await Get(*client, dead_url),
                 StatusIs(absl::StatusCode::kUnavailable));
+  }());
+}
+
+// Every piece of a body, in the order it arrived.
+Task<std::vector<std::string>> ReadPieces(http::Body& body) {
+  std::vector<std::string> pieces;
+  for (;;) {
+    const absl::StatusOr<std::string_view> piece = co_await body.Next(Soon());
+    ABSL_EXPECT_OK(piece);
+    if (!piece.ok() || piece->empty()) co_return pieces;
+    pieces.emplace_back(*piece);
+  }
+}
+
+// Open returns once the head is in, and the body is then read a piece at a
+// time: here, a chunk at a time, though a piece is whatever has arrived.
+TEST(ClientTest, OpensAResponseAndReadsItsBodyInPieces) {
+  RunOnEventLoop([]() -> Task<> {
+    const Server server({
+        {
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/event-stream\r\n"
+            "Transfer-Encoding: chunked\r\n"
+            "\r\n"
+            "5\r\nhello\r\n"
+            "7\r\n, world\r\n"
+            "0\r\n"
+            "\r\n",
+        },
+    });
+    const std::unique_ptr<http::Client> client = http::NewClient();
+
+    const absl::StatusOr<http::OpenResponse> response = co_await client->Open(
+        http::Request{
+            .url = server.Url("/events"),
+        },
+        Soon());
+
+    ABSL_EXPECT_OK(response);
+    if (!response.ok()) co_return;
+    EXPECT_EQ(response->status, 200);
+    EXPECT_EQ(response->Get("Content-Type"), "text/event-stream");
+    EXPECT_THAT(co_await ReadPieces(*response->body),
+                ElementsAre("hello", ", world"));
+  }());
+}
+
+// A body that goes quiet costs the reader a deadline, not the body: what the
+// server sends later is still there to be read. The server here pauses in
+// the middle of a chunk.
+TEST(ClientTest, KeepsABodyReadableAfterADeadlinePasses) {
+  RunOnEventLoop([]() -> Task<> {
+    const absl::StatusOr<net::Listener> listener = net::Listener::OnLoopback();
+    ABSL_EXPECT_OK(listener);
+    if (!listener.ok()) co_return;
+    Spawn([](const net::Listener& listener) -> Task<> {
+      const absl::StatusOr<std::unique_ptr<net::Stream>> stream =
+          co_await listener.Accept();
+      ABSL_EXPECT_OK(stream);
+      if (!stream.ok()) co_return;
+      net::Reader reader(stream->get());
+      ABSL_EXPECT_OK(co_await http::ReadHead(reader, Soon()));
+
+      ABSL_EXPECT_OK(co_await (*stream)->Write(
+          "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nc\r\nhello"));
+      co_await Sleep(std::chrono::milliseconds(50));
+      ABSL_EXPECT_OK(co_await (*stream)->Write(", world\r\n0\r\n\r\n"));
+    }(*listener));
+    const std::unique_ptr<http::Client> client = http::NewClient();
+
+    const absl::StatusOr<http::OpenResponse> response = co_await client->Open(
+        http::Request{
+            .url = absl::StrCat("http://127.0.0.1:", listener->address().port,
+                                "/"),
+        },
+        Soon());
+    ABSL_EXPECT_OK(response);
+    if (!response.ok()) co_return;
+    http::Body& body = *response->body;
+
+    EXPECT_THAT(co_await body.Next(Soon()), IsOkAndHolds("hello"));
+    EXPECT_THAT(co_await body.Next(net::After(std::chrono::milliseconds(5))),
+                StatusIs(absl::StatusCode::kDeadlineExceeded));
+    EXPECT_THAT(co_await body.Next(Soon()), IsOkAndHolds(", world"));
+    EXPECT_THAT(co_await body.Next(Soon()), IsOkAndHolds(""));
+  }());
+}
+
+// Once a body has been read to its end the connection is free for the next
+// request: the server here accepts only one.
+TEST(ClientTest, ReusesTheConnectionAfterABodyIsReadToItsEnd) {
+  RunOnEventLoop([]() -> Task<> {
+    const Server server({
+        {
+            Ok("streamed"),
+            Ok("whole"),
+        },
+    });
+    const std::unique_ptr<http::Client> client = http::NewClient();
+
+    {
+      const absl::StatusOr<http::OpenResponse> response = co_await client->Open(
+          http::Request{
+              .url = server.Url("/"),
+          },
+          Soon());
+      ABSL_EXPECT_OK(response);
+      if (!response.ok()) co_return;
+      EXPECT_THAT(co_await ReadPieces(*response->body),
+                  ElementsAre("streamed"));
+    }
+
+    const absl::StatusOr<http::Response> next =
+        co_await Get(*client, server.Url("/"));
+    ABSL_EXPECT_OK(next);
+    if (next.ok()) EXPECT_EQ(next->body, "whole");
+  }());
+}
+
+// A body abandoned part-way takes its connection with it, since the rest of
+// the response is still on the way down it. The next request gets a new one.
+TEST(ClientTest, DropsTheConnectionOfAnAbandonedBody) {
+  RunOnEventLoop([]() -> Task<> {
+    const Server server({
+        {
+            Ok("abandoned"),
+        },
+        {
+            Ok("fresh"),
+        },
+    });
+    const std::unique_ptr<http::Client> client = http::NewClient();
+
+    ABSL_EXPECT_OK(co_await client->Open(
+        http::Request{
+            .url = server.Url("/"),
+        },
+        Soon()));
+
+    const absl::StatusOr<http::Response> next =
+        co_await Get(*client, server.Url("/"));
+    ABSL_EXPECT_OK(next);
+    if (next.ok()) EXPECT_EQ(next->body, "fresh");
   }());
 }
 

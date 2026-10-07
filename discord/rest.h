@@ -47,6 +47,10 @@ class Rest {
   Task<absl::Status> CreateMessage(discord::ChannelId channel,
                                    std::string_view content);
 
+  // Shows the bot as typing in `channel`, for about ten seconds or until it
+  // next posts there, whichever comes first.
+  Task<absl::Status> TriggerTyping(discord::ChannelId channel);
+
   // Adds `emoji`, a Unicode emoji such as "🌅", to `message` in `channel` as
   // a reaction from the bot.
   Task<absl::Status> AddReaction(discord::ChannelId channel,

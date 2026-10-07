@@ -73,6 +73,21 @@ TEST(RestTest, CreateMessagePostsJsonToTheChannel) {
   }());
 }
 
+// Showing the bot as typing is a POST to the channel with nothing in it.
+TEST(RestTest, TriggerTypingPostsToTheChannel) {
+  RunOnEventLoop([]() -> Task<> {
+    http::FakeClient http;
+    Rest rest(&http, "secret-token");
+
+    ABSL_EXPECT_OK(co_await rest.TriggerTyping(kChannel));
+
+    const http::Request& request = http.requests().front();
+    EXPECT_EQ(request.method, http::Method::kPost);
+    EXPECT_EQ(request.url, "https://discord.com/api/v10/channels/22/typing");
+    EXPECT_EQ(request.body, "");
+  }());
+}
+
 // A reaction is a PUT with no body; the emoji travels in the path, encoded.
 TEST(RestTest, AddReactionPutsTheEncodedEmoji) {
   RunOnEventLoop([]() -> Task<> {

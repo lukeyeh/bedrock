@@ -160,6 +160,13 @@ Task<absl::Status> Rest::CreateMessage(discord::ChannelId channel,
       .status();
 }
 
+Task<absl::Status> Rest::TriggerTyping(discord::ChannelId channel) {
+  co_return (co_await Call(http::Method::kPost,
+                           absl::StrCat("/channels/", channel.value, "/typing"),
+                           std::nullopt))
+      .status();
+}
+
 Task<absl::Status> Rest::AddReaction(discord::ChannelId channel,
                                      discord::MessageId message,
                                      std::string_view emoji) {

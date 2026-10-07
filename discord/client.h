@@ -90,6 +90,12 @@ class Client {
   // Discord cannot be reached.
   Task<absl::Status> Send(ChannelId channel, std::string_view text);
 
+  // Shows the bot as typing in `channel`, the way a person who is writing a
+  // message is shown: for about ten seconds, or until the bot next posts
+  // there, whichever comes first. Call it again to go on typing. Fails as
+  // Send does.
+  Task<absl::Status> ShowTyping(ChannelId channel);
+
   // Adds `emoji`, a Unicode emoji such as "🌅", to `message` as a reaction
   // from the bot. Fails as Send does.
   Task<absl::Status> React(const Message& message, std::string_view emoji);

@@ -83,6 +83,10 @@ Task<absl::Status> Client::Send(ChannelId channel, std::string_view text) {
   co_return co_await rest_->CreateMessage(channel, text);
 }
 
+Task<absl::Status> Client::ShowTyping(ChannelId channel) {
+  co_return co_await rest_->TriggerTyping(channel);
+}
+
 Task<absl::Status> Client::React(const Message& message,
                                  std::string_view emoji) {
   co_return co_await rest_->AddReaction(message.channel, message.id, emoji);

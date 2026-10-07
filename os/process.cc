@@ -4,6 +4,7 @@
 #include <signal.h>
 #include <spawn.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -12,12 +13,15 @@
 #include <cerrno>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "async/task.h"
@@ -27,30 +31,23 @@
 // The environment the child inherits.
 extern char** environ;  // NOLINT(readability-redundant-declaration)
 
-namespace os {
-namespace {
+namespace os_internal {
 
-using Clock = std::chrono::steady_clock;
-
-// How often a program that has closed its output is checked for having
-// exited. Nearly always it has by the first look.
-constexpr Duration kExitPollInterval = std::chrono::milliseconds(1);
-
-// A running child process and the socket its output arrives on. Destroying
-// it kills the child, and whatever the child started, if it has not been
-// seen to exit.
+// A running child process and the socket it is reached by. Destroying it
+// kills the child, and whatever the child started, if it has not been seen
+// to exit.
 class Child {
  public:
-  Child(pid_t process, Socket output)
-      : process_(process), output_(std::move(output)) {}
+  Child(pid_t process, os::Socket socket)
+      : process_(process), socket_(std::move(socket)) {}
   Child(Child&& other)
       : process_(std::exchange(other.process_, -1)),
-        output_(std::move(other.output_)) {}
+        socket_(std::move(other.socket_)) {}
   ~Child() {
     if (process_ > 0) Kill();
   }
 
-  const Socket& output() const { return output_; }
+  const os::Socket& socket() const { return socket_; }
 
   // How the child ended, if it has: its exit code, or nothing for a signal.
   // The outer optional is unset while it is still running.
@@ -86,7 +83,30 @@ class Child {
 
   // The kernel's number for the child, or -1 once it has been waited for.
   pid_t process_;
-  Socket output_;
+  os::Socket socket_;
+};
+
+}  // namespace os_internal
+
+namespace os {
+namespace {
+
+using Clock = std::chrono::steady_clock;
+using os_internal::Child;
+
+// How often a program that has closed its output is checked for having
+// exited. Nearly always it has by the first look.
+constexpr Duration kExitPollInterval = std::chrono::milliseconds(1);
+
+// The longest a program that is taking its time to exit goes unchecked.
+constexpr Duration kSlowestExitPollInterval = std::chrono::milliseconds(50);
+
+// Which of the program's standard streams the socket carries.
+enum class Wiring : uint8_t {
+  // Its output and its errors, together. It is given no input.
+  kOutputAndErrors,
+  // Its input and its output. Its errors go where this process's do.
+  kInputAndOutput,
 };
 
 // A descriptor that is closed unless released.
@@ -106,14 +126,15 @@ class Descriptor {
   int descriptor_;
 };
 
-// Starts the program, with its output going to one end of a socket pair and
-// the other end kept here. A socket rather than a pipe, because sockets are
-// what the operations in io.h work on.
-absl::StatusOr<Child> Start(const Command& command) {
-  if (command.arguments.empty()) {
+// Starts the program, with one end of a socket pair as its standard streams
+// and the other end kept here. A socket rather than a pipe, because sockets
+// are what the operations in io.h work on.
+absl::StatusOr<Child> StartChild(const std::vector<std::string>& arguments,
+                                 const std::string& directory, Wiring wiring) {
+  if (arguments.empty()) {
     return absl::InvalidArgumentError("no program to run");
   }
-  const std::string& program = command.arguments.front();
+  const std::string& program = arguments.front();
 
   std::array<int, 2> ends = {};
   if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, ends.data()) != 0) {
@@ -126,12 +147,20 @@ absl::StatusOr<Child> Start(const Command& command) {
   // becoming the program.
   posix_spawn_file_actions_t actions;
   posix_spawn_file_actions_init(&actions);
-  posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null",
-                                   O_RDONLY, 0);
-  posix_spawn_file_actions_adddup2(&actions, theirs.get(), STDOUT_FILENO);
-  posix_spawn_file_actions_adddup2(&actions, theirs.get(), STDERR_FILENO);
-  if (!command.directory.empty()) {
-    posix_spawn_file_actions_addchdir_np(&actions, command.directory.c_str());
+  switch (wiring) {
+    case Wiring::kOutputAndErrors:
+      posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null",
+                                       O_RDONLY, 0);
+      posix_spawn_file_actions_adddup2(&actions, theirs.get(), STDOUT_FILENO);
+      posix_spawn_file_actions_adddup2(&actions, theirs.get(), STDERR_FILENO);
+      break;
+    case Wiring::kInputAndOutput:
+      posix_spawn_file_actions_adddup2(&actions, theirs.get(), STDIN_FILENO);
+      posix_spawn_file_actions_adddup2(&actions, theirs.get(), STDOUT_FILENO);
+      break;
+  }
+  if (!directory.empty()) {
+    posix_spawn_file_actions_addchdir_np(&actions, directory.c_str());
   }
 
   // A process group of its own, so that it and its descendants can be
@@ -141,17 +170,17 @@ absl::StatusOr<Child> Start(const Command& command) {
   posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP);
   posix_spawnattr_setpgroup(&attributes, 0);
 
-  std::vector<char*> arguments;
-  arguments.reserve(command.arguments.size() + 1);
-  for (const std::string& argument : command.arguments) {
+  std::vector<char*> pointers;
+  pointers.reserve(arguments.size() + 1);
+  for (const std::string& argument : arguments) {
     // posix_spawn takes them as non-const but does not modify them.
-    arguments.push_back(const_cast<char*>(argument.c_str()));
+    pointers.push_back(const_cast<char*>(argument.c_str()));
   }
-  arguments.push_back(nullptr);
+  pointers.push_back(nullptr);
 
   pid_t process = -1;
   const int failure = posix_spawnp(&process, program.c_str(), &actions,
-                                   &attributes, arguments.data(), environ);
+                                   &attributes, pointers.data(), environ);
   posix_spawnattr_destroy(&attributes);
   posix_spawn_file_actions_destroy(&actions);
   if (failure != 0) {
@@ -164,7 +193,8 @@ absl::StatusOr<Child> Start(const Command& command) {
 }  // namespace
 
 Task<absl::StatusOr<ProcessResult>> RunProcess(Command command) {
-  absl::StatusOr<Child> child = Start(command);
+  absl::StatusOr<Child> child = StartChild(command.arguments, command.directory,
+                                           Wiring::kOutputAndErrors);
   if (!child.ok()) co_return child.status();
 
   const std::optional<Clock::time_point> deadline =
@@ -190,7 +220,7 @@ Task<absl::StatusOr<ProcessResult>> RunProcess(Command command) {
     }
 
     const absl::StatusOr<size_t> received =
-        co_await Receive(child->output(), buffer, left);
+        co_await Receive(child->socket(), buffer, left);
     if (absl::IsDeadlineExceeded(received.status())) {
       result.timed_out = true;
       break;
@@ -223,6 +253,48 @@ Task<absl::StatusOr<ProcessResult>> RunProcess(Command command) {
 
   child->Kill();
   co_return result;
+}
+
+absl::StatusOr<Process> Process::Start(const Program& program) {
+  ABSL_ASSIGN_OR_RETURN(Child child,
+                        StartChild(program.arguments, program.directory,
+                                   Wiring::kInputAndOutput));
+
+  return Process(std::make_unique<Child>(std::move(child)));
+}
+
+Process::Process(std::unique_ptr<Child> child) : child_(std::move(child)) {}
+Process::Process(Process&&) = default;
+Process& Process::operator=(Process&&) = default;
+Process::~Process() = default;
+
+const Socket& Process::io() const { return child_->socket(); }
+
+void Process::CloseInput() {
+  // Fails only if the program has already gone, which comes to the same.
+  shutdown(os_internal::DescriptorOf(child_->socket()), SHUT_WR);
+}
+
+Task<std::optional<int>> Process::Exit(std::optional<Duration> time_limit) {
+  const std::optional<Clock::time_point> deadline =
+      time_limit.has_value() ? std::optional(Clock::now() + *time_limit)
+                             : std::nullopt;
+
+  // Looked for often at first, since a program that has been told to stop
+  // usually has, and then less and less often.
+  Duration interval = kExitPollInterval;
+  for (;;) {
+    const std::optional<std::optional<int>> exited = child_->Exited();
+    if (exited.has_value()) co_return *exited;
+
+    if (deadline.has_value() && Clock::now() >= *deadline) break;
+
+    co_await Sleep(interval);
+    interval = std::min(interval * 2, kSlowestExitPollInterval);
+  }
+
+  child_->Kill();
+  co_return std::nullopt;
 }
 
 }  // namespace os

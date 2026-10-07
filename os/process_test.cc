@@ -1,5 +1,6 @@
 // os::RunProcess by example: running another program and getting back what
-// it printed and how it ended.
+// it printed and how it ended. Then os::Process: a program that is talked to
+// while it runs.
 //
 // Every test here runs twice, once on each I/O backend.
 
@@ -7,10 +8,13 @@
 
 #include <benchmark/benchmark.h>
 
+#include <array>
 #include <chrono>
+#include <cstddef>
 #include <cstdlib>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "absl/status/status.h"
@@ -43,6 +47,32 @@ Task<> RunThenSetFlag(os::Command command,
   done = true;
 }
 
+Task<> RunThenSetFlag(Task<> task, bool& done) {
+  co_await task;
+  done = true;
+}
+
+// What the program writes next, or "" once it has closed its output.
+Task<std::string> ReceiveSome(const os::Process& process) {
+  std::array<char, 256> buffer = {};
+  const absl::StatusOr<size_t> received =
+      co_await os::Receive(process.io(), buffer, std::chrono::seconds(5));
+  ABSL_EXPECT_OK(received);
+
+  co_return std::string(buffer.data(), received.ok() ? *received : 0);
+}
+
+Task<> SendAll(const os::Process& process, std::string_view data) {
+  while (!data.empty()) {
+    const absl::StatusOr<size_t> sent =
+        co_await os::Send(process.io(), data, {});
+    ABSL_EXPECT_OK(sent);
+    if (!sent.ok()) co_return;
+
+    data.remove_prefix(*sent);
+  }
+}
+
 // Gives every test a driver of the backend under test, attached to the test's
 // thread, and a way to run a command on it. EventLoop, a layer up, is what
 // does this for a real program.
@@ -62,6 +92,15 @@ class ProcessTest : public testing::TestWithParam<os::IoBackend> {
     // NOLINTNEXTLINE(bugprone-infinite-loop): set by a task woken in the call.
     while (!done) driver_.WakeFinished(done);
     return result;
+  }
+
+  // Runs a test body that waits, to its end.
+  void RunToEnd(Task<> body) {
+    bool done = false;
+    TaskScope scope;
+    scope.Spawn(RunThenSetFlag(std::move(body), done));
+    // NOLINTNEXTLINE(bugprone-infinite-loop): set by a task woken in the call.
+    while (!done) driver_.WakeFinished(done);
   }
 
   os::IoDriver driver_ = NewDriver(GetParam());
@@ -194,6 +233,139 @@ TEST_P(ProcessTest, FailsWhenTheProgramCannotBeRun) {
               }),
               StatusIs(absl::StatusCode::kNotFound));
   EXPECT_THAT(Run({}), StatusIs(absl::StatusCode::kInvalidArgument));
+}
+
+// What is sent to a Process is its input and what it prints is received, any
+// number of times over, for as long as it runs.
+TEST_P(ProcessTest, TalksToAProgramWhileItRuns) {
+  RunToEnd([]() -> Task<> {
+    absl::StatusOr<os::Process> process = os::Process::Start({
+        .arguments =
+            {
+                "cat",
+            },
+    });
+    ABSL_EXPECT_OK(process);
+    if (!process.ok()) co_return;
+
+    co_await SendAll(*process, "first\n");
+    EXPECT_EQ(co_await ReceiveSome(*process), "first\n");
+
+    co_await SendAll(*process, "second\n");
+    EXPECT_EQ(co_await ReceiveSome(*process), "second\n");
+  }());
+}
+
+// Closing the input is how a program that reads to the end is told to
+// finish. What it prints afterwards still arrives, then the end of its
+// output, and then it can be seen out.
+TEST_P(ProcessTest, FinishesWhenItsInputIsClosed) {
+  RunToEnd([]() -> Task<> {
+    absl::StatusOr<os::Process> process = os::Process::Start({
+        .arguments =
+            {
+                "sh",
+                "-c",
+                "cat >/dev/null; echo done; exit 3",
+            },
+    });
+    ABSL_EXPECT_OK(process);
+    if (!process.ok()) co_return;
+
+    co_await SendAll(*process, "anything\n");
+    process->CloseInput();
+
+    EXPECT_EQ(co_await ReceiveSome(*process), "done\n");
+    EXPECT_EQ(co_await ReceiveSome(*process), "");
+    EXPECT_THAT(co_await process->Exit(), Optional(3));
+  }());
+}
+
+// A program that will not exit in the time it is given is killed, and has no
+// exit code.
+TEST_P(ProcessTest, ExitKillsAProgramThatOutstaysItsTimeLimit) {
+  RunToEnd([]() -> Task<> {
+    absl::StatusOr<os::Process> process = os::Process::Start({
+        .arguments =
+            {
+                "sleep",
+                "30",
+            },
+    });
+    ABSL_EXPECT_OK(process);
+    if (!process.ok()) co_return;
+
+    const auto start = std::chrono::steady_clock::now();
+    EXPECT_EQ(co_await process->Exit(milliseconds(100)), std::nullopt);
+    EXPECT_THAT(std::chrono::steady_clock::now() - start,
+                Lt(std::chrono::seconds(10)));
+  }());
+}
+
+// A Process does not outlive the object: nothing is left running by a caller
+// that stops caring.
+TEST_P(ProcessTest, DestroyingAProcessKillsTheProgram) {
+  RunToEnd([]() -> Task<> {
+    std::string process_number;
+    {
+      absl::StatusOr<os::Process> process = os::Process::Start({
+          .arguments =
+              {
+                  "sh",
+                  "-c",
+                  "echo $$; exec sleep 30",
+              },
+      });
+      ABSL_EXPECT_OK(process);
+      if (!process.ok()) co_return;
+
+      process_number = co_await ReceiveSome(*process);
+    }
+
+    // `kill -0` asks whether a process exists, and fails if it does not.
+    const absl::StatusOr<os::ProcessResult> probe = co_await os::RunProcess({
+        .arguments =
+            {
+                "sh",
+                "-c",
+                "kill -0 " + process_number,
+            },
+    });
+    ABSL_EXPECT_OK(probe);
+    if (!probe.ok()) co_return;
+    EXPECT_THAT(probe->exit_code, Optional(testing::Ne(0)));
+  }());
+}
+
+// A program in a directory of its own choosing.
+TEST_P(ProcessTest, StartsAProcessInTheGivenDirectory) {
+  RunToEnd([]() -> Task<> {
+    absl::StatusOr<os::Process> process = os::Process::Start({
+        .arguments =
+            {
+                "pwd",
+                "-P",
+            },
+        .directory = "/",
+    });
+    ABSL_EXPECT_OK(process);
+    if (!process.ok()) co_return;
+
+    EXPECT_EQ(co_await ReceiveSome(*process), "/\n");
+  }());
+}
+
+// As with RunProcess, the only errors are those of not being able to start.
+TEST_P(ProcessTest, FailsToStartWhatCannotBeRun) {
+  EXPECT_THAT(os::Process::Start({
+                  .arguments =
+                      {
+                          "no-such-program-anywhere",
+                      },
+              }),
+              StatusIs(absl::StatusCode::kNotFound));
+  EXPECT_THAT(os::Process::Start({}),
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 // -----------------------------------------------------------------------------

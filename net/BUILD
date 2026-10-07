@@ -23,12 +23,14 @@ cc_library(
 cc_library(
     name = "net",
     srcs = [
+        "process.cc",
         "reader.cc",
         "stream.cc",
         "tls.cc",
         "url.cc",
     ],
     hdrs = [
+        "process.h",
         "reader.h",
         "stream.h",
         "tls.h",
@@ -38,6 +40,7 @@ cc_library(
         "//async:status_macros",
         "//async:task",
         "//os:io",
+        "//os:process",
         "//os:socket",
         "@abseil-cpp",
         "@openssl",
@@ -61,6 +64,7 @@ cc_library(
     )
     for name in [
         "event_loop_test",
+        "process_test",
         "reader_test",
         "stream_test",
         "tls_test",

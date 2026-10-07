@@ -43,7 +43,7 @@ The only code that makes system calls. Sockets are classes that own their descri
 | `os/epoll_backend.h` | Internal to //os: the epoll way of carrying out operations. |
 | `os/io.h` | The kernel's asynchronous network I/O, as C++. |
 | `os/io_uring_backend.h` | Internal to //os: the io_uring way of carrying out operations. |
-| `os/process.h` | Other programs, run as child processes. |
+| `os/process.h` | Other programs, run as child processes: `RunProcess` runs one to its end, and a `Process` is talked to while it runs. |
 | `os/random.h` | Random bytes from the kernel: unpredictable to anyone, so fit for things that are secret because they cannot be guessed, such as a session token. |
 | `os/socket.h` | Network sockets as C++ objects. Wraps the kernel's socket interface so that callers deal in classes, enums and absl::Status rather than file descriptors, option constants and error numbers. |
 
@@ -54,6 +54,7 @@ The only code that makes system calls. Sockets are classes that own their descri
 | Header | What it is for |
 | --- | --- |
 | `net/event_loop.h` | The event loop that runs asynchronous functions (see async/task.h) on a thread. |
+| `net/process.h` | Another program as a `Stream`: what is written is its standard input, what is read is its standard output. |
 | `net/reader.h` | Reads a Stream in the units protocols are made of (lines, fixed-size blocks) rather than in whatever pieces the network delivers. |
 | `net/stream.h` | Reliable byte streams to other machines. A `Stream` is what protocols are written against; `Dial` produces one for an address, taking care of name resolution, TCP and (when asked) TLS, so that callers never see which kind they hold. |
 | `net/tls.h` | TLS as a layer over any Stream: hand in a connected stream, get back one that encrypts everything written to it and has verified who is on the other end. Most code wants `net::Dial`, which applies this for you. |

@@ -72,11 +72,17 @@ struct Address {
 Task<absl::StatusOr<std::unique_ptr<Stream>>> Dial(Address address,
                                                    Deadline deadline);
 
-// Accepts plaintext streams on a loopback port chosen by the system. This is
-// how tests stand in for a remote server.
+// Accepts plaintext streams on a loopback port: one chosen by the system,
+// which is how tests stand in for a remote server, or one named, which is how
+// a program serves whatever else is on the same machine, such as a proxy that
+// takes care of TLS for it.
 class Listener {
  public:
   static absl::StatusOr<Listener> OnLoopback();
+
+  // Fails with FailedPrecondition if another program has `port`. A program
+  // that has just stopped does not count: its port can be taken at once.
+  static absl::StatusOr<Listener> OnLoopback(uint16_t port);
 
   // What to pass to `Dial` to reach this listener.
   Address address() const;

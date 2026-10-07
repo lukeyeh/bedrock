@@ -8,6 +8,7 @@
 #include <array>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -140,6 +141,31 @@ TEST(DialTest, FailsWhenNothingListens) {
 
     EXPECT_THAT(co_await net::Dial(address, Soon()),
                 StatusIs(absl::StatusCode::kUnavailable));
+  }());
+}
+
+// A listener can be given its port, which is how a program serves at an
+// address others are told in advance. Only one listener can have it.
+TEST(ListenerTest, ListensOnAPortOfTheCallersChoosing) {
+  RunOnEventLoop([]() -> Task<> {
+    // A port the system knows to be free: one it has just handed out.
+    uint16_t port = 0;
+    {
+      const absl::StatusOr<net::Listener> any = net::Listener::OnLoopback();
+      ABSL_EXPECT_OK(any);
+      if (!any.ok()) co_return;
+      port = any->address().port;
+    }
+
+    const absl::StatusOr<net::Listener> listener =
+        net::Listener::OnLoopback(port);
+    ABSL_EXPECT_OK(listener);
+    if (!listener.ok()) co_return;
+    EXPECT_EQ(listener->address().port, port);
+
+    ABSL_EXPECT_OK(co_await net::Dial(listener->address(), Soon()));
+    EXPECT_THAT(net::Listener::OnLoopback(port),
+                StatusIs(absl::StatusCode::kFailedPrecondition));
   }());
 }
 

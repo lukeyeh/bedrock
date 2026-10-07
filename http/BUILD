@@ -1,24 +1,31 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
-# The client side of HTTP/1.1, which is all a bot needs: it calls a web API
-# and opens WebSockets, and serves nothing.
+# HTTP/1.1, from both ends: a client for calling a web API, and a server for
+# being one.
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "http",
     srcs = [
         "client.cc",
+        "cookie.cc",
+        "form.cc",
         "head.cc",
+        "server.cc",
     ],
     hdrs = [
         "client.h",
+        "cookie.h",
+        "form.h",
         "head.h",
+        "server.h",
     ],
     deps = [
         "//async:status_macros",
         "//async:task",
         "//net",
+        "//net:event_loop",
         "@abseil-cpp",
     ],
 )
@@ -54,7 +61,10 @@ cc_library(
     )
     for name in [
         "client_test",
+        "cookie_test",
         "fake_client_test",
+        "form_test",
         "head_test",
+        "server_test",
     ]
 ]

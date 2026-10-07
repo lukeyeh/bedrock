@@ -51,7 +51,8 @@ cc_library(
     ],
 )
 
-# An HTTP/1.1 client, and http::FakeClient for tests.
+# HTTP/1.1: a client, a server, forms and cookies, and http::FakeClient for
+# tests.
 cc_library(
     name = "http",
     srcs = ["lib/libhttp.a"],

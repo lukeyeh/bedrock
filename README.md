@@ -10,7 +10,7 @@ downwards only.
 ```
 discord/          a Discord bot's client
 ├─ websocket/     WebSocket connections
-│  └─ http/       an HTTP/1.1 client
+│  └─ http/       HTTP/1.1, as client and as server
 │     └─ net/     the event loop; byte streams: TCP, TLS, buffered reading
 │        └─ os/   the kernel: sockets, io_uring, epoll
 │           └─ async/   Task, Sequence, Awaitable, TaskScope
@@ -43,6 +43,7 @@ The only code that makes system calls. Sockets are classes that own their descri
 | `os/epoll_backend.h` | Internal to //os: the epoll way of carrying out operations. |
 | `os/io.h` | The kernel's asynchronous network I/O, as C++. |
 | `os/io_uring_backend.h` | Internal to //os: the io_uring way of carrying out operations. |
+| `os/random.h` | Random bytes from the kernel: unpredictable to anyone, so fit for things that are secret because they cannot be guessed, such as a session token. |
 | `os/socket.h` | Network sockets as C++ objects. Wraps the kernel's socket interface so that callers deal in classes, enums and absl::Status rather than file descriptors, option constants and error numbers. |
 
 ### `net/`: an event loop and byte streams
@@ -57,15 +58,18 @@ The only code that makes system calls. Sockets are classes that own their descri
 | `net/tls.h` | TLS as a layer over any Stream: hand in a connected stream, get back one that encrypts everything written to it and has verified who is on the other end. Most code wants `net::Dial`, which applies this for you. |
 | `net/url.h` | Splits a URL into the two things a client needs: where to connect, and what to ask for once connected. |
 
-### `http/`: an HTTP/1.1 client
+### `http/`: HTTP/1.1, as client and as server
 
-`http::Client::Send` is a coroutine that sends a request and returns the response. `http::FakeClient` answers from a queue and records what it was sent, for testing code that makes requests.
+`http::Serve` has a handler answer every request that arrives on a listener, with `http/form.h` and `http/cookie.h` for what requests carry. `http::Client::Send` is a coroutine that sends a request and returns the response. `http::FakeClient` answers from a queue and records what it was sent, for testing code that makes requests.
 
 | Header | What it is for |
 | --- | --- |
 | `http/client.h` | An HTTP client: give it a request, get back the server's response. |
+| `http/cookie.h` | Cookies: small named values a server asks a browser to keep and send back with every later request, which is how a server recognises someone who has signed in. |
+| `http/form.h` | Names and values written the way HTML forms send them: the body of a posted form, and the query of a URL. |
 | `http/fake_client.h` | An http::Client for tests: it records the requests it is sent and answers them from a queue, so code that calls a web API can be tested without one. |
 | `http/head.h` | The part of an HTTP/1.1 message that comes before the body: a start line and headers. Requests, responses and the WebSocket handshake all begin with one, and this is the only place that knows how it is written. |
+| `http/server.h` | An HTTP server: hand it a listener and a handler, and it has the handler answer every request that arrives. |
 
 ### `websocket/`: WebSocket connections (RFC 6455)
 

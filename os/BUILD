@@ -32,6 +32,28 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "random",
+    srcs = ["random.cc"],
+    hdrs = ["random.h"],
+    deps = [
+        "@abseil-cpp",
+    ],
+)
+
+cc_test(
+    name = "random_test",
+    size = "small",
+    srcs = ["random_test.cc"],
+    deps = [
+        ":random",
+        "//testing:main",
+        "@abseil-cpp",
+        "@gbenchmark",
+        "@gtest",
+    ],
+)
+
 cc_test(
     name = "socket_test",
     size = "small",

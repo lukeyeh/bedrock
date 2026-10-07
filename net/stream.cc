@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <span>
 #include <string_view>
@@ -78,10 +79,15 @@ Task<absl::StatusOr<std::unique_ptr<Stream>>> Dial(Address address,
 
 absl::StatusOr<Listener> Listener::OnLoopback() {
   // Port 0 asks for any free port.
-  ABSL_ASSIGN_OR_RETURN(const os::SocketAddress any_port,
-                        os::SocketAddress::Parse("127.0.0.1", 0));
+  return OnLoopback(0);
+}
+
+absl::StatusOr<Listener> Listener::OnLoopback(const uint16_t port) {
+  ABSL_ASSIGN_OR_RETURN(const os::SocketAddress address,
+                        os::SocketAddress::Parse("127.0.0.1", port));
   ABSL_ASSIGN_OR_RETURN(os::Socket socket, os::Socket::CreateTcp());
-  ABSL_RETURN_IF_ERROR(socket.Bind(any_port));
+  ABSL_RETURN_IF_ERROR(socket.Enable(os::SocketOption::kReuseAddress));
+  ABSL_RETURN_IF_ERROR(socket.Bind(address));
   ABSL_RETURN_IF_ERROR(socket.Listen());
 
   ABSL_ASSIGN_OR_RETURN(const os::SocketAddress bound, socket.LocalAddress());

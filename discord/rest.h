@@ -3,6 +3,9 @@
 // Each function here is one API call. What they share is in one place: the
 // address, authentication, encoding, waiting out rate limits, and turning
 // Discord's refusals into Statuses.
+//
+// Calls may be made by several tasks at once. They are carried out one at a
+// time, in the order they were made.
 
 #ifndef DISCORD_REST_H_
 #define DISCORD_REST_H_
@@ -14,6 +17,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "async/mutex.h"
 #include "async/task.h"
 #include "discord/model.h"
 #include "http/client.h"
@@ -69,13 +73,21 @@ class Rest {
                              std::string_view token, std::string_view content);
 
  private:
-  // Makes one API call and evaluates to the JSON Discord answered with, which
-  // is null when it answered with nothing.
+  // Makes one API call, once those made before it are done, and evaluates to
+  // the JSON Discord answered with, which is null when it answered with
+  // nothing.
   Task<absl::StatusOr<json::Value>> Call(http::Method method, std::string path,
                                          std::optional<json::Value> body);
 
+  // The call itself. Must not overlap another, which is Call's business.
+  Task<absl::StatusOr<json::Value>> CallNow(http::Method method,
+                                            std::string path,
+                                            std::optional<json::Value> body);
+
   http::Client* http_;
   std::string token_;
+  // An http::Client makes one request at a time.
+  Mutex one_at_a_time_;
 };
 
 }  // namespace discord_internal

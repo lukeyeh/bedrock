@@ -29,6 +29,7 @@ The one place that touches the C++ coroutine machinery (`promise_type`, `await_s
 | Header | What it is for |
 | --- | --- |
 | `async/awaitable.h` | How to make something a task can wait for. |
+| `async/mutex.h` | Mutex: making tasks take turns at something only one can do at a time. |
 | `async/sequence.h` | Sequence<T>: the return type of an asynchronous function that produces many Ts, one at a time. |
 | `async/status_macros.h` | ABSL_RETURN_IF_ERROR and ABSL_ASSIGN_OR_RETURN for asynchronous functions. |
 | `async/task.h` | Task<T>: the return type of an asynchronous function that produces a T. |

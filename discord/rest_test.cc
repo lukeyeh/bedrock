@@ -5,6 +5,7 @@
 
 #include <benchmark/benchmark.h>
 
+#include <chrono>
 #include <optional>
 #include <string>
 #include <utility>
@@ -282,6 +283,56 @@ TEST(RestTest, GivesUpOnARateLimitThatDoesNotLift) {
     EXPECT_THAT(co_await rest.CreateMessage(kChannel, "gm"),
                 StatusIs(absl::StatusCode::kResourceExhausted));
     EXPECT_EQ(http.requests().size(), 4);
+  }());
+}
+
+// An http::Client that takes a moment over each request, and objects to being
+// given a second before it has answered the first, as a real one may.
+class UnhurriedClient : public http::Client {
+ public:
+  Task<absl::StatusOr<http::Response>> Send(
+      const http::Request& request) override {
+    EXPECT_FALSE(busy_) << "given two requests at once";
+    busy_ = true;
+    co_await Sleep(std::chrono::milliseconds(1));
+    busy_ = false;
+
+    bodies_.push_back(request.body);
+    co_return http::Response{
+        .status = 204,
+    };
+  }
+
+  const std::vector<std::string>& bodies() const { return bodies_; }
+
+ private:
+  bool busy_ = false;
+  std::vector<std::string> bodies_;
+};
+
+Task<> Post(Rest& rest, std::string content, int& unfinished) {
+  ABSL_EXPECT_OK(co_await rest.CreateMessage(kChannel, content));
+  --unfinished;
+}
+
+// Several tasks may ask at once, as a bot does that posts from one task
+// while another answers a command. The calls go out one at a time, in the
+// order they were made.
+TEST(RestTest, CallsMadeAtOnceAreCarriedOutInTurn) {
+  RunOnEventLoop([]() -> Task<> {
+    UnhurriedClient http;
+    Rest rest(&http, "secret-token");
+    int unfinished = 3;
+
+    Spawn(Post(rest, "first", unfinished));
+    Spawn(Post(rest, "second", unfinished));
+    Spawn(Post(rest, "third", unfinished));
+    // NOLINTNEXTLINE(bugprone-infinite-loop): counted down by the tasks.
+    while (unfinished > 0) co_await Sleep(std::chrono::milliseconds(1));
+
+    EXPECT_THAT(http.bodies(), testing::ElementsAre(R"({"content":"first"})",
+                                                    R"({"content":"second"})",
+                                                    R"({"content":"third"})"));
   }());
 }
 

@@ -16,6 +16,30 @@ cc_library(
 )
 
 cc_library(
+    name = "mutex",
+    hdrs = ["mutex.h"],
+    deps = [
+        ":awaitable",
+        ":task",
+    ],
+)
+
+cc_test(
+    name = "mutex_test",
+    size = "small",
+    srcs = ["mutex_test.cc"],
+    deps = [
+        ":awaitable",
+        ":mutex",
+        ":task",
+        ":task_scope",
+        "//testing:main",
+        "@gbenchmark",
+        "@gtest",
+    ],
+)
+
+cc_library(
     name = "sequence",
     hdrs = ["sequence.h"],
 )

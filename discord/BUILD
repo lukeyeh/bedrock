@@ -21,6 +21,7 @@ cc_library(
         "model.h",
     ],
     deps = [
+        "//async:mutex",
         "//async:sequence",
         "//async:status_macros",
         "//async:task",
@@ -44,6 +45,7 @@ cc_library(
         ],
         deps = [
             ":discord",
+            "//async:awaitable",
             "//async:task",
             "//http",
             "//http:fake_client",

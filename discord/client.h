@@ -20,7 +20,10 @@
 // limits, are the client's business and do not appear here.
 //
 // Everything is asynchronous (see async/task.h) and must be called from a
-// task running on an EventLoop. A client is used by one task at a time.
+// task running on an EventLoop. One task at a time
+// may wait in NextEvent. The rest of a client is for any task to use at any
+// time, while another waits in NextEvent included: what they ask of Discord
+// is carried out one request at a time, in the order asked.
 
 #ifndef DISCORD_CLIENT_H_
 #define DISCORD_CLIENT_H_

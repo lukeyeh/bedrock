@@ -80,6 +80,12 @@ absl::Status Refusal(int status, const json::Value& error,
 Task<absl::StatusOr<json::Value>> Rest::Call(http::Method method,
                                              std::string path,
                                              std::optional<json::Value> body) {
+  co_return co_await one_at_a_time_.Run(
+      CallNow(method, std::move(path), std::move(body)));
+}
+
+Task<absl::StatusOr<json::Value>> Rest::CallNow(
+    http::Method method, std::string path, std::optional<json::Value> body) {
   http::Request request{
       .method = method,
       .url = absl::StrCat(kApi, path),

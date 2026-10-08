@@ -85,10 +85,12 @@ class Client {
   // keeps the connection alive.
   Task<absl::StatusOr<Event>> NextEvent();
 
-  // Posts `text` in `channel`. Fails with PermissionDenied if the bot may
-  // not post there, NotFound if there is no such channel, and Unavailable if
-  // Discord cannot be reached.
-  Task<absl::Status> Send(ChannelId channel, std::string_view text);
+  // Posts `text` in `channel`, and evaluates to the id of the message that
+  // made, by which it can be reacted to and its reactions recognised. Fails
+  // with PermissionDenied if the bot may not post there, NotFound if there
+  // is no such channel, and Unavailable if Discord cannot be reached.
+  Task<absl::StatusOr<MessageId>> Send(ChannelId channel,
+                                       std::string_view text);
 
   // Shows the bot as typing in `channel`, the way a person who is writing a
   // message is shown: for about ten seconds, or until the bot next posts
@@ -99,6 +101,11 @@ class Client {
   // Adds `emoji`, a Unicode emoji such as "🌅", to `message` as a reaction
   // from the bot. Fails as Send does.
   Task<absl::Status> React(const Message& message, std::string_view emoji);
+
+  // The same, for a message known only by where it is and its id, as one
+  // the bot posted itself is.
+  Task<absl::Status> React(ChannelId channel, MessageId message,
+                           std::string_view emoji);
 
   // Which server `channel` is in. Fails with NotFound or PermissionDenied if
   // the bot cannot see the channel, and FailedPrecondition if it is not a

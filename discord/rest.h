@@ -43,9 +43,10 @@ class Rest {
   // Where to connect for events: a wss:// URL.
   Task<absl::StatusOr<std::string>> GatewayUrl();
 
-  // Posts `content` as a message in `channel`.
-  Task<absl::Status> CreateMessage(discord::ChannelId channel,
-                                   std::string_view content);
+  // Posts `content` as a message in `channel`, and evaluates to the id of
+  // the message that made.
+  Task<absl::StatusOr<discord::MessageId>> CreateMessage(
+      discord::ChannelId channel, std::string_view content);
 
   // Shows the bot as typing in `channel`, for about ten seconds or until it
   // next posts there, whichever comes first.

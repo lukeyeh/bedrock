@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -268,6 +269,34 @@ TEST(ParseApplicationIdTest, PrefersWhatReadySays) {
                 .value,
             77);
   EXPECT_EQ(discord_internal::ParseApplicationId(Json("{}"), self).value, 99);
+}
+
+// A reaction says which message, who, and with what. In a server the one
+// who reacted comes as a member, nickname and all.
+TEST(ParseEventTest, ReadsAReaction) {
+  const std::optional<discord::Event> event =
+      ParseEvent("MESSAGE_REACTION_ADD", Json(R"({
+        "user_id":"44","channel_id":"22","message_id":"11","guild_id":"33",
+        "member":{"nick":"Luke","user":{"id":"44","username":"lukeyeh"}},
+        "emoji":{"id":null,"name":"✅"}})"));
+
+  ASSERT_TRUE(event.has_value());
+  if (!event.has_value()) return;
+  const auto* const added = std::get_if<discord::ReactionAdded>(&*event);
+  ASSERT_NE(added, nullptr);
+  EXPECT_EQ(added->message.value, 11);
+  EXPECT_EQ(added->channel.value, 22);
+  EXPECT_EQ(added->guild.value, 33);
+  EXPECT_EQ(added->user.id.value, 44);
+  EXPECT_EQ(added->user.name, "Luke");
+  EXPECT_EQ(added->emoji, "✅");
+}
+
+// One that does not say which message is not reported.
+TEST(ParseEventTest, IgnoresAReactionToNothing) {
+  EXPECT_FALSE(ParseEvent("MESSAGE_REACTION_ADD",
+                          Json(R"({"user_id":"44","channel_id":"22"})"))
+                   .has_value());
 }
 
 // -----------------------------------------------------------------------------

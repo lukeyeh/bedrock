@@ -58,7 +58,11 @@ TEST(RestTest, CreateMessagePostsJsonToTheChannel) {
     http.Answer(Answer(200, R"({"id": "33"})"));
     Rest rest(&http, "secret-token");
 
-    ABSL_EXPECT_OK(co_await rest.CreateMessage(kChannel, "gm \"all\" 🌅"));
+    // The answer says what the new message is called.
+    EXPECT_THAT(co_await rest.CreateMessage(kChannel, "gm \"all\" 🌅"),
+                IsOkAndHolds(discord::MessageId{
+                    .value = 33,
+                }));
 
     const http::Request& request = http.requests().front();
     EXPECT_EQ(request.method, http::Method::kPost);

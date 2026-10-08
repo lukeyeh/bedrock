@@ -34,6 +34,8 @@ enum class Intent : uint32_t {
   kGuilds = 1U << 0,
   // Messages in those servers' channels.
   kGuildMessages = 1U << 9,
+  // Reactions to those messages.
+  kGuildMessageReactions = 1U << 10,
   // The text of those messages. Without it they arrive empty. Must also be
   // enabled for the bot in the Discord Developer Portal.
   kMessageContent = 1U << 15,

@@ -151,13 +151,15 @@ Task<absl::StatusOr<std::string>> Rest::GatewayUrl() {
   co_return url;
 }
 
-Task<absl::Status> Rest::CreateMessage(discord::ChannelId channel,
-                                       std::string_view content) {
-  co_return (
+Task<absl::StatusOr<discord::MessageId>> Rest::CreateMessage(
+    discord::ChannelId channel, std::string_view content) {
+  CO_ASSIGN_OR_RETURN(
+      const json::Value answer,
       co_await Call(http::Method::kPost,
                     absl::StrCat("/channels/", channel.value, "/messages"),
-                    json::Value().Set("content", content)))
-      .status();
+                    json::Value().Set("content", content)));
+
+  co_return ParseMessageId(answer);
 }
 
 Task<absl::Status> Rest::TriggerTyping(discord::ChannelId channel) {

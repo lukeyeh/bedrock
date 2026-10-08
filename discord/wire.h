@@ -32,6 +32,10 @@ discord::GuildId ParseGuildOfChannel(const json::Value& channel);
 // message: its id, its channel, its author.
 absl::StatusOr<discord::Message> ParseMessage(const json::Value& message);
 
+// The id a message object gives for the message, or the id 0 if it gives
+// none.
+discord::MessageId ParseMessageId(const json::Value& message);
+
 // The commands as Discord wants them described when they are registered.
 json::Value FormatCommands(std::span<const discord::Command> commands);
 

@@ -53,6 +53,7 @@ Task<absl::StatusOr<Client>> Client::Connect(std::string token,
   const std::vector<Intent> intents = {
       Intent::kGuilds,
       Intent::kGuildMessages,
+      Intent::kGuildMessageReactions,
       Intent::kMessageContent,
   };
   auto gateway = std::make_unique<Gateway>(std::move(connect), std::move(url),
@@ -79,7 +80,8 @@ Task<absl::StatusOr<Event>> Client::NextEvent() {
   }
 }
 
-Task<absl::Status> Client::Send(ChannelId channel, std::string_view text) {
+Task<absl::StatusOr<MessageId>> Client::Send(ChannelId channel,
+                                             std::string_view text) {
   co_return co_await rest_->CreateMessage(channel, text);
 }
 
@@ -90,6 +92,11 @@ Task<absl::Status> Client::ShowTyping(ChannelId channel) {
 Task<absl::Status> Client::React(const Message& message,
                                  std::string_view emoji) {
   co_return co_await rest_->AddReaction(message.channel, message.id, emoji);
+}
+
+Task<absl::Status> Client::React(ChannelId channel, MessageId message,
+                                 std::string_view emoji) {
+  co_return co_await rest_->AddReaction(channel, message, emoji);
 }
 
 Task<absl::StatusOr<GuildId>> Client::GuildOf(ChannelId channel) {

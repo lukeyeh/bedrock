@@ -190,10 +190,43 @@ std::optional<discord::Event> ParseInteraction(const json::Value& data) {
 
 }  // namespace
 
+discord::MessageId ParseMessageId(const json::Value& message) {
+  return ParseId<discord::MessageKind>(message["id"]);
+}
+
+namespace {
+
+std::optional<discord::Event> ParseReactionAdded(const json::Value& data) {
+  // In a server whoever reacted comes as a member of it; in a direct
+  // message only their id is given.
+  const json::Value& member = data["member"];
+  discord::ReactionAdded added{
+      .message = ParseId<discord::MessageKind>(data["message_id"]),
+      .channel = ParseId<discord::ChannelKind>(data["channel_id"]),
+      .guild = ParseId<discord::GuildKind>(data["guild_id"]),
+      .user = member.is_null()
+                  ? discord::User{
+                        .id = ParseId<discord::UserKind>(data["user_id"]),
+                    }
+                  : ParseUser(member["user"], member),
+      .emoji = data["emoji"]["name"].AsString(),
+  };
+  if (added.message.value == 0 || added.channel.value == 0 ||
+      added.user.id.value == 0) {
+    LOG(WARNING) << "ignoring a malformed reaction";
+    return std::nullopt;
+  }
+
+  return added;
+}
+
+}  // namespace
+
 std::optional<discord::Event> ParseEvent(std::string_view type,
                                          const json::Value& data) {
   if (type == "MESSAGE_CREATE") return ParseMessageCreated(data);
   if (type == "INTERACTION_CREATE") return ParseInteraction(data);
+  if (type == "MESSAGE_REACTION_ADD") return ParseReactionAdded(data);
 
   return std::nullopt;
 }

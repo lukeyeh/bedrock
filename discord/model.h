@@ -136,9 +136,23 @@ struct CommandInvoked {
   std::string token;
 };
 
+// Someone added a reaction to a message in a channel the bot can see. The
+// bot's own reactions are reported like anyone else's.
+struct ReactionAdded {
+  MessageId message;
+  ChannelId channel;
+  // The server it happened in. The id 0 for a direct message.
+  GuildId guild;
+  // Who reacted.
+  User user;
+  // The emoji itself for a Unicode emoji such as "🌅", and the name it goes
+  // by for one of a server's own.
+  std::string emoji;
+};
+
 // Something that happened. More kinds will join this as the client learns to
 // report them; handle the ones you care about and ignore the rest.
-using Event = std::variant<MessageCreated, CommandInvoked>;
+using Event = std::variant<MessageCreated, CommandInvoked, ReactionAdded>;
 
 }  // namespace discord
 

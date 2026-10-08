@@ -162,6 +162,16 @@ Task<absl::StatusOr<discord::MessageId>> Rest::CreateMessage(
   co_return ParseMessageId(answer);
 }
 
+Task<absl::Status> Rest::EditMessage(discord::ChannelId channel,
+                                     discord::MessageId message,
+                                     std::string_view content) {
+  co_return (co_await Call(http::Method::kPatch,
+                           absl::StrCat("/channels/", channel.value,
+                                        "/messages/", message.value),
+                           json::Value().Set("content", content)))
+      .status();
+}
+
 Task<absl::Status> Rest::TriggerTyping(discord::ChannelId channel) {
   co_return (co_await Call(http::Method::kPost,
                            absl::StrCat("/channels/", channel.value, "/typing"),

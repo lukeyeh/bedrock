@@ -77,6 +77,22 @@ TEST(RestTest, CreateMessagePostsJsonToTheChannel) {
   }());
 }
 
+// Editing a message is a PATCH to the message, with what it should now say.
+TEST(RestTest, EditMessagePatchesTheMessage) {
+  RunOnEventLoop([]() -> Task<> {
+    http::FakeClient http;
+    Rest rest(&http, "secret-token");
+
+    ABSL_EXPECT_OK(co_await rest.EditMessage(kChannel, kMessage, "gm, all"));
+
+    const http::Request& request = http.requests().front();
+    EXPECT_EQ(request.method, http::Method::kPatch);
+    EXPECT_EQ(request.url,
+              "https://discord.com/api/v10/channels/22/messages/11");
+    EXPECT_EQ(request.body, R"({"content":"gm, all"})");
+  }());
+}
+
 // Showing the bot as typing is a POST to the channel with nothing in it.
 TEST(RestTest, TriggerTypingPostsToTheChannel) {
   RunOnEventLoop([]() -> Task<> {

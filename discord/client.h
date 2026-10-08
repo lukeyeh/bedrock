@@ -92,6 +92,12 @@ class Client {
   Task<absl::StatusOr<MessageId>> Send(ChannelId channel,
                                        std::string_view text);
 
+  // Changes what `message` in `channel` says to `text`. It must be one the
+  // bot posted, which is to say one whose id came from Send. Fails as Send
+  // does, with PermissionDenied for anybody else's message.
+  Task<absl::Status> Edit(ChannelId channel, MessageId message,
+                          std::string_view text);
+
   // Shows the bot as typing in `channel`, the way a person who is writing a
   // message is shown: for about ten seconds, or until the bot next posts
   // there, whichever comes first. Call it again to go on typing. Fails as

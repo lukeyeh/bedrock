@@ -48,6 +48,11 @@ class Rest {
   Task<absl::StatusOr<discord::MessageId>> CreateMessage(
       discord::ChannelId channel, std::string_view content);
 
+  // Makes `content` what `message` in `channel`, which the bot posted, says.
+  Task<absl::Status> EditMessage(discord::ChannelId channel,
+                                 discord::MessageId message,
+                                 std::string_view content);
+
   // Shows the bot as typing in `channel`, for about ten seconds or until it
   // next posts there, whichever comes first.
   Task<absl::Status> TriggerTyping(discord::ChannelId channel);

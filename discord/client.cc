@@ -85,6 +85,11 @@ Task<absl::StatusOr<MessageId>> Client::Send(ChannelId channel,
   co_return co_await rest_->CreateMessage(channel, text);
 }
 
+Task<absl::Status> Client::Edit(ChannelId channel, MessageId message,
+                                std::string_view text) {
+  co_return co_await rest_->EditMessage(channel, message, text);
+}
+
 Task<absl::Status> Client::ShowTyping(ChannelId channel) {
   co_return co_await rest_->TriggerTyping(channel);
 }

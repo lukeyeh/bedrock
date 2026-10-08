@@ -89,14 +89,22 @@ class Client {
   // made, by which it can be reacted to and its reactions recognised. Fails
   // with PermissionDenied if the bot may not post there, NotFound if there
   // is no such channel, and Unavailable if Discord cannot be reached.
-  Task<absl::StatusOr<MessageId>> Send(ChannelId channel,
-                                       std::string_view text);
+  //
+  // Discord previews the pages a message links to, under it, unless
+  // `previews` says not to.
+  Task<absl::StatusOr<MessageId>> Send(
+      ChannelId channel, std::string_view text,
+      LinkPreviews previews = LinkPreviews::kShown);
 
   // Changes what `message` in `channel` says to `text`. It must be one the
   // bot posted, which is to say one whose id came from Send. Fails as Send
   // does, with PermissionDenied for anybody else's message.
+  //
+  // `previews` is as for Send. A message whose previews are hidden stays
+  // that way however it is edited.
   Task<absl::Status> Edit(ChannelId channel, MessageId message,
-                          std::string_view text);
+                          std::string_view text,
+                          LinkPreviews previews = LinkPreviews::kShown);
 
   // Shows the bot as typing in `channel`, the way a person who is writing a
   // message is shown: for about ten seconds, or until the bot next posts

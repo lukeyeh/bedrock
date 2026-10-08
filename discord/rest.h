@@ -46,12 +46,14 @@ class Rest {
   // Posts `content` as a message in `channel`, and evaluates to the id of
   // the message that made.
   Task<absl::StatusOr<discord::MessageId>> CreateMessage(
-      discord::ChannelId channel, std::string_view content);
+      discord::ChannelId channel, std::string_view content,
+      discord::LinkPreviews previews = discord::LinkPreviews::kShown);
 
   // Makes `content` what `message` in `channel`, which the bot posted, says.
-  Task<absl::Status> EditMessage(discord::ChannelId channel,
-                                 discord::MessageId message,
-                                 std::string_view content);
+  Task<absl::Status> EditMessage(
+      discord::ChannelId channel, discord::MessageId message,
+      std::string_view content,
+      discord::LinkPreviews previews = discord::LinkPreviews::kShown);
 
   // Shows the bot as typing in `channel`, for about ten seconds or until it
   // next posts there, whichever comes first.

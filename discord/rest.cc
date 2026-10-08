@@ -151,24 +151,44 @@ Task<absl::StatusOr<std::string>> Rest::GatewayUrl() {
   co_return url;
 }
 
+namespace {
+
+// Discord's flag for a message under which links are not previewed.
+constexpr int64_t kSuppressEmbeds = 1 << 2;
+
+// A message that says `content`, as Discord wants one described.
+json::Value MessageBody(std::string_view content,
+                        discord::LinkPreviews previews) {
+  json::Value body = json::Value().Set("content", content);
+  if (previews == discord::LinkPreviews::kHidden) {
+    body.Set("flags", kSuppressEmbeds);
+  }
+
+  return body;
+}
+
+}  // namespace
+
 Task<absl::StatusOr<discord::MessageId>> Rest::CreateMessage(
-    discord::ChannelId channel, std::string_view content) {
+    discord::ChannelId channel, std::string_view content,
+    discord::LinkPreviews previews) {
   CO_ASSIGN_OR_RETURN(
       const json::Value answer,
       co_await Call(http::Method::kPost,
                     absl::StrCat("/channels/", channel.value, "/messages"),
-                    json::Value().Set("content", content)));
+                    MessageBody(content, previews)));
 
   co_return ParseMessageId(answer);
 }
 
 Task<absl::Status> Rest::EditMessage(discord::ChannelId channel,
                                      discord::MessageId message,
-                                     std::string_view content) {
+                                     std::string_view content,
+                                     discord::LinkPreviews previews) {
   co_return (co_await Call(http::Method::kPatch,
                            absl::StrCat("/channels/", channel.value,
                                         "/messages/", message.value),
-                           json::Value().Set("content", content)))
+                           MessageBody(content, previews)))
       .status();
 }
 

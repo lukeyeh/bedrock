@@ -77,6 +77,26 @@ TEST(RestTest, CreateMessagePostsJsonToTheChannel) {
   }());
 }
 
+// A message can be posted, or edited, so that Discord shows no preview of
+// the pages it links to.
+TEST(RestTest, MessagesCanHideLinkPreviews) {
+  RunOnEventLoop([]() -> Task<> {
+    http::FakeClient http;
+    Rest rest(&http, "secret-token");
+
+    ABSL_EXPECT_OK(co_await rest.CreateMessage(
+        kChannel, "see https://example.com", discord::LinkPreviews::kHidden));
+    ABSL_EXPECT_OK(co_await rest.EditMessage(kChannel, kMessage,
+                                             "see https://example.org",
+                                             discord::LinkPreviews::kHidden));
+
+    EXPECT_EQ(http.requests()[0].body,
+              R"({"content":"see https://example.com","flags":4})");
+    EXPECT_EQ(http.requests()[1].body,
+              R"({"content":"see https://example.org","flags":4})");
+  }());
+}
+
 // Editing a message is a PATCH to the message, with what it should now say.
 TEST(RestTest, EditMessagePatchesTheMessage) {
   RunOnEventLoop([]() -> Task<> {

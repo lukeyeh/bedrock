@@ -54,6 +54,13 @@ inline std::string Mention(UserId user) {
   return absl::StrCat("<@", user.value, ">");
 }
 
+// Whether Discord may show, under a message, a preview of each page the
+// message links to: the page's title, a picture, a summary.
+enum class LinkPreviews : uint8_t {
+  kShown,
+  kHidden,
+};
+
 // Someone posted a message in a channel the bot can see. Discord's own
 // notices in a channel (that someone joined, pinned a message, and the like)
 // are not reported.

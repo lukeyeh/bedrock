@@ -81,13 +81,14 @@ Task<absl::StatusOr<Event>> Client::NextEvent() {
 }
 
 Task<absl::StatusOr<MessageId>> Client::Send(ChannelId channel,
-                                             std::string_view text) {
-  co_return co_await rest_->CreateMessage(channel, text);
+                                             std::string_view text,
+                                             LinkPreviews previews) {
+  co_return co_await rest_->CreateMessage(channel, text, previews);
 }
 
 Task<absl::Status> Client::Edit(ChannelId channel, MessageId message,
-                                std::string_view text) {
-  co_return co_await rest_->EditMessage(channel, message, text);
+                                std::string_view text, LinkPreviews previews) {
+  co_return co_await rest_->EditMessage(channel, message, text, previews);
 }
 
 Task<absl::Status> Client::ShowTyping(ChannelId channel) {
